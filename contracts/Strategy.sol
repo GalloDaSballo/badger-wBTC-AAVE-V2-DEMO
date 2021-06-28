@@ -21,6 +21,8 @@ contract Strategy is BaseStrategy {
     using Address for address;
     using SafeMath for uint256;
 
+    event Debug(string name, uint256 amount);
+
     IERC20 public constant aToken =
         IERC20(0x9ff58f4fFB29fA2266Ab25e75e2A8b3503311656); // Token we provide liquidity with
     IERC20 public constant reward =
@@ -104,6 +106,7 @@ contract Strategy is BaseStrategy {
         // Swap Rewards in UNIV3
         // NOTE: Unoptimized, can be frontrun and most importantly this pool is low liquidity
 
+
             ISwapRouter.ExactInputSingleParams memory fromRewardToAAVEParams
          = ISwapRouter.ExactInputSingleParams(
             address(reward),
@@ -133,14 +136,40 @@ contract Strategy is BaseStrategy {
         .ExactInputParams(path, address(this), now, aaveToSwap, 0);
         ISwapRouter(ROUTER).exactInput(fromAAVETowBTCParams);
 
-        // At the end want.balanceOf(address(this)) >= _debtOustanding as the Vault wants it back
-        if (_debtOutstanding > 0) {
-            // I don't believe we'll ever have this as BaseStrategy liquidatesAll
-            liquidatePosition(_debtOutstanding);
+        // Calculate Gain from AAVE interest
+        uint256 wantToLeave = vault.strategies(address(this)).totalDebt;
+        uint256 currentWantInAave = estimatedTotalAssets();
+
+        if (currentWantInAave > wantToLeave) {
+            emit Debug("balanceOfWant", want.balanceOf(address(this)));
+            emit Debug("balanceInPool", aToken.balanceOf(address(this)));
+            emit Debug("currentWantInAave", currentWantInAave);
+            emit Debug("wantToLeave", wantToLeave);
+            uint256 toWithdraw = currentWantInAave.sub(wantToLeave);
+            emit Debug("toWithdraw", toWithdraw);
+            LENDING_POOL.withdraw(address(want), toWithdraw, address(this));
         }
 
         uint256 afterBalance = want.balanceOf(address(this));
-        _profit = afterBalance.sub(beforeBalance);
+        _profit = afterBalance.sub(beforeBalance); // Profit here
+        emit Debug("_profit", _profit);
+
+        // At the end want.balanceOf(address(this)) >= _debtOustanding as the Vault wants it back
+        if (_debtOutstanding > 0) {
+            emit Debug("_debtOutstanding > 0", _debtOutstanding);
+
+            uint256 toWithdraw = _debtOutstanding;
+
+            if (_debtOutstanding < aToken.balanceOf(address(this))) {
+                toWithdraw = aToken.balanceOf(address(this));
+            }
+
+            // I don't believe we'll ever have this as BaseStrategy liquidatesAll
+            // In a different strategy (leveraged), we probably should pay debt back first
+            liquidatePosition(toWithdraw);
+            _debtPayment = toWithdraw;
+            //Since we don't leverage we can always repay max, provided it's below the max amount in pool
+        }
     }
 
     // Like tend, just deposit into AAVE
@@ -149,8 +178,9 @@ contract Strategy is BaseStrategy {
         // NOTE: Try to adjust positions so that `_debtOutstanding` can be freed up on *next* harvest (not immediately)
         // NOTE: Since we can withdraw at any time (non leveraged), no reason to withdraw here, we can do it on harvest
         // This is tend, not much to change here
-        uint256 toDeposit = want.balanceOf(address(this));
-        if (toDeposit > 0) {
+        uint256 wantAvailable = want.balanceOf(address(this));
+        if (wantAvailable > _debtOutstanding) {
+            uint256 toDeposit = wantAvailable.sub(_debtOutstanding);
             want.safeApprove(address(LENDING_POOL), toDeposit);
             LENDING_POOL.deposit(address(want), toDeposit, address(this), 0);
         }
@@ -169,9 +199,6 @@ contract Strategy is BaseStrategy {
         //This is basically withdrawSome
         LENDING_POOL.withdraw(address(want), _amountNeeded, address(this));
 
-        require(want.balanceOf(address(this)) >= _liquidatedAmount);
-        require(_liquidatedAmount + _loss <= _amountNeeded);
-
         uint256 totalAssets = want.balanceOf(address(this));
         if (_amountNeeded > totalAssets) {
             _liquidatedAmount = totalAssets;
@@ -179,6 +206,9 @@ contract Strategy is BaseStrategy {
         } else {
             _liquidatedAmount = _amountNeeded;
         }
+
+        require(want.balanceOf(address(this)) >= _liquidatedAmount);
+        require(_liquidatedAmount + _loss <= _amountNeeded);
     }
 
     // Withdraw all from AAVE Pool

@@ -45,7 +45,7 @@ def test_emergency_exit(
 
 
 def test_profitable_harvest(
-    chain, accounts, token, vault, strategy, user, strategist, amount, RELATIVE_APPROX
+    chain, accounts, token, vault, strategy, user, strategist, amount, RELATIVE_APPROX, lpComponent, reward
 ):
     # Deposit to the vault
     token.approve(vault.address, amount, {"from": user})
@@ -72,12 +72,17 @@ def test_profitable_harvest(
 
     # NOTE: Your strategy must be profitable
     # NOTE: May have to be changed based on implementation
-    assets = strategy.estimatedTotalAssets()
+    stratAssets = strategy.estimatedTotalAssets()
     
-    print("assets")
-    print(assets)
+    print("stratAssets")
+    print(stratAssets)
+
+    vaultAssets = vault.totalAssets()
+    print("vaultAssets")
+    print(vaultAssets)
+
     
-    assert assets + profit > amount
+    assert stratAssets + profit > amount
     assert vault.pricePerShare() > before_pps ## NOTE: May want to tweak this to >= or increase amounts and blocks
 
 
