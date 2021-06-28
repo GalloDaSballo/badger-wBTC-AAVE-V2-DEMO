@@ -4,7 +4,7 @@ import pytest
 
 
 def test_operation(
-    chain, accounts, token, vault, strategy, user, strategist, amount, RELATIVE_APPROX
+    chain, token, vault, strategy, user, amount, RELATIVE_APPROX
 ):
     # Deposit to the vault
     user_balance_before = token.balanceOf(user)
@@ -58,7 +58,10 @@ def test_profitable_harvest(
     assert pytest.approx(strategy.estimatedTotalAssets(), rel=RELATIVE_APPROX) == amount
 
     # TODO: Add some code before harvest #2 to simulate earning yield
-    # ???
+    before_pps = vault.pricePerShare()
+
+    chain.mine(1000) # Mine 1k blocks = one day, getting interest and rewards NOTE: 6.5k blocks is one day
+
 
     # Harvest 2: Realize profit
     chain.sleep(1)
@@ -68,12 +71,18 @@ def test_profitable_harvest(
     profit = token.balanceOf(vault.address)  # Profits go to vault
 
     # NOTE: Your strategy must be profitable
-    assert token.balanceOf(strategy) + profit > amount
-    assert vault.pricePerShare() > before_pps
+    # NOTE: May have to be changed based on implementation
+    assets = strategy.estimatedTotalAssets()
+    
+    print("assets")
+    print(assets)
+    
+    assert assets + profit > amount
+    assert vault.pricePerShare() > before_pps ## NOTE: May want to tweak this to >= or increase amounts and blocks
 
 
 def test_change_debt(
-    chain, gov, token, vault, strategy, user, strategist, amount, RELATIVE_APPROX
+    chain, gov, token, vault, strategy, user, amount, RELATIVE_APPROX
 ):
     # Deposit to the vault and harvest
     token.approve(vault.address, amount, {"from": user})
@@ -97,7 +106,7 @@ def test_change_debt(
     assert pytest.approx(strategy.estimatedTotalAssets(), rel=RELATIVE_APPROX) == half
 
 
-def test_sweep(gov, vault, strategy, token, user, amount, weth, weth_amout):
+def test_sweep(gov, vault, strategy, token, user, amount, weth, weth_amout, lpComponent, reward):
     # Strategy want token doesn't work
     token.transfer(strategy, amount, {"from": user})
     assert token.address == strategy.want()
@@ -111,7 +120,10 @@ def test_sweep(gov, vault, strategy, token, user, amount, weth, weth_amout):
 
     # NOTE: You have to add protected tokens to the strat
     with brownie.reverts("!protected"):
-        strategy.sweep(strategy.protectedToken(), {"from": gov})
+        strategy.sweep(lpComponent, {"from": gov})
+
+    with brownie.reverts("!protected"):
+        strategy.sweep(reward, {"from": gov})
 
     before_balance = weth.balanceOf(gov)
     weth.transfer(strategy, weth_amout, {"from": user})
@@ -122,7 +134,7 @@ def test_sweep(gov, vault, strategy, token, user, amount, weth, weth_amout):
 
 
 def test_triggers(
-    chain, gov, vault, strategy, token, amount, user, weth, weth_amout, strategist
+    chain, gov, vault, strategy, token, amount, user
 ):
     # Deposit to the vault and harvest
     token.approve(vault.address, amount, {"from": user})
