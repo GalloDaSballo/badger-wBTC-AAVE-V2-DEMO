@@ -50,6 +50,18 @@ def lpComponent():
     yield Contract(token_address)
 
 @pytest.fixture
+def borrowed():
+    # TODO: Change to your borrowed (For leveraged strats)
+    token_address = "0x9c39809Dec7F95F5e0713634a4D0701329B3b4d2"  # this should be the address of the ERC-20 used by the strategy/vault (DAI)
+    yield Contract(token_address)
+
+
+@pytest.fixture
+def incentivesController():
+    token_address = "0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5"
+    yield Contract(token_address)
+
+@pytest.fixture
 def reward():
     # TODO: Change to your want
     token_address = "0x4da27a545c0c5b758a6ba100e3a049001de870f5"  # this should be the address of the ERC-20 used by the strategy/vault (DAI)
