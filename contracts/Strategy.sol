@@ -21,8 +21,6 @@ contract Strategy is BaseStrategy {
     using Address for address;
     using SafeMath for uint256;
 
-    event Debug(string name, uint256 amount);
-
     IERC20 public constant aToken =
         IERC20(0x9ff58f4fFB29fA2266Ab25e75e2A8b3503311656); // Token we provide liquidity with
     IERC20 public constant reward =
@@ -79,14 +77,12 @@ contract Strategy is BaseStrategy {
 
         // Get current amount of want // used to estimate profit
         uint256 beforeBalance = want.balanceOf(address(this));
-        emit Debug("beforeBalance", beforeBalance);
 
         // Calculate Gain from AAVE interest
         uint256 currentWantInAave = aToken.balanceOf(address(this));
         uint256 initialDeposit = vault.strategies(address(this)).totalDebt;
         if (currentWantInAave > initialDeposit) {
             uint256 interestProfit = currentWantInAave.sub(initialDeposit);
-            emit Debug("interestProfit", interestProfit);
             LENDING_POOL.withdraw(address(want), interestProfit, address(this));
             // Withdraw interest of aToken so that now we have exactly the same amount
         }
@@ -145,15 +141,11 @@ contract Strategy is BaseStrategy {
         ISwapRouter(ROUTER).exactInput(fromAAVETowBTCParams);
 
         uint256 afterBalance = want.balanceOf(address(this));
-        emit Debug("afterBalance", afterBalance);
 
         _profit = afterBalance.sub(beforeBalance); // Profit here
-        emit Debug("_profit", _profit);
 
         // At the end want.balanceOf(address(this)) >= _debtOustanding as the Vault wants it back
         if (_debtOutstanding > 0) {
-            emit Debug("_debtOutstanding > 0", _debtOutstanding);
-
             uint256 toWithdraw = _debtOutstanding;
 
             if (_debtOutstanding < aToken.balanceOf(address(this))) {
@@ -175,10 +167,8 @@ contract Strategy is BaseStrategy {
         // NOTE: Since we can withdraw at any time (non leveraged), no reason to withdraw here, we can do it on harvest
         // This is tend, not much to change here
         uint256 wantAvailable = want.balanceOf(address(this));
-        Debug("adjustPosition.wantAvailable", wantAvailable);
         if (wantAvailable > _debtOutstanding) {
             uint256 toDeposit = wantAvailable.sub(_debtOutstanding);
-            Debug("adjustPosition.toDeposit", toDeposit);
             want.safeApprove(address(LENDING_POOL), toDeposit);
             LENDING_POOL.deposit(address(want), toDeposit, address(this), 0);
         }
