@@ -44,54 +44,6 @@ def test_emergency_exit(
     assert strategy.estimatedTotalAssets() < amount
 
 
-def test_profitable_harvest(
-    chain, accounts, token, vault, strategy, user, strategist, amount, RELATIVE_APPROX, lpComponent, reward
-):
-    # Deposit to the vault
-    token.approve(vault.address, amount, {"from": user})
-    vault.deposit(amount, {"from": user})
-    assert token.balanceOf(vault.address) == amount
-
-    # Harvest 1: Send funds through the strategy
-    chain.sleep(1)
-    strategy.harvest()
-    assert pytest.approx(strategy.estimatedTotalAssets(), rel=RELATIVE_APPROX) == amount
-
-    # TODO: Add some code before harvest #2 to simulate earning yield
-    before_pps = vault.pricePerShare()
-    before_total = vault.totalAssets()
-
-    chain.mine(1000) # NOTE: 6.5k blocks is one day
-    chain.sleep(1)
-    strategy.harvest()
-
-    # Harvest 2: Realize profit
-    chain.sleep(1)
-    strategy.harvest()
-    chain.sleep(3600 * 6)  # 6 hrs needed for profits to unlock
-    chain.mine(1)
-    profit = token.balanceOf(vault.address)  # Profits go to vault
-
-    # NOTE: Your strategy must be profitable
-    # NOTE: May have to be changed based on implementation
-    stratAssets = strategy.estimatedTotalAssets()
-    
-    print("stratAssets")
-    print(stratAssets)
-
-    vaultAssets = vault.totalAssets()
-    print("vaultAssets")
-    print(vaultAssets)
-
-    
-    assert stratAssets + profit > amount
-    ## NOTE: Changed to >= because I can't get the PPS to increase
-    assert vault.pricePerShare() >= before_pps ## NOTE: May want to tweak this to >= or increase amounts and blocks
-    assert vault.totalAssets() > before_total ## NOTE: Assets must increase or there's something off with harvest
-    vault.withdraw(amount, {"from": user})
-    assert token.balanceOf(user) > amount ## The user must have made more money, else it means funds are stuck
-
-
 
 def test_change_debt(
     chain, gov, token, vault, strategy, user, amount, RELATIVE_APPROX
